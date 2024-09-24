@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Canvas Image Region Replacement</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            margin: 0;
+            height: 100vh;
+            background-color: #f0f0f0;
+        }
+        #canvas {
+            border: 1px solid black;
+        }
+        button {
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <input type="file" id="imageLoader" accept="image/*" />
+    <canvas id="canvas" width="500" height="500"></canvas>
+    <button id="sendToApi">Send Selected Region to API</button>
+
+    <script>
+        const canvas = document.getElementById("canvas");
+        const ctx = canvas.getContext("2d", {willReadFrequently: true});
+        let selectedRegion = null;
+        let originalImageData = null;
+
+        // Load the first image onto the canvas
+        document.getElementById("imageLoader").addEventListener("change", (e) => {
+            const reader = new FileReader();
+            reader.onload = function (event) {
+                const img = new Image();
+                img.onload = function () {
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    ctx.drawImage(img, 0, 0);
+                    originalImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                }
+                img.src = event.target.result;
+            }
+            reader.readAsDataURL(e.target.files[0]);
+        });
+
+        // Select a region on the canvas by dragging
+        canvas.addEventListener("mousedown", function (e) {
+            const rect = canvas.getBoundingClientRect();
+            const startX = e.clientX - rect.left;
+            const startY = e.clientY - rect.top;
+
+            canvas.onmousemove = function (e) {
+                const mouseX = e.clientX - rect.left;
+                const mouseY = e.clientY - rect.top;
+
+                // Restore original image before drawing selection box
+                ctx.putImageData(originalImageData, 0, 0);
+
+                // Update selected region dimensions
+                selectedRegion = {
+                    x: startX,
+                    y: startY,
+                    width: mouseX - startX,
+                    height: mouseY - startY,
+                };
+
+                // Draw the selection box
+                ctx.strokeStyle = "red";
+                ctx.lineWidth = 2;
+                ctx.strokeRect(startX, startY, selectedRegion.width, selectedRegion.height);
+            }
+
+            canvas.addEventListener("mouseup", function () {
+                canvas.onmousemove = null;
+            });
+        });
+
+        // Send the selected region to the API
+        document.getElementById("sendToApi").addEventListener("click", async () => {
+            if (!selectedRegion) {
+                alert("Please select a region first!");
+                return;
+            }
+
+            // Store the selected region coordinates
+            const regionToReplace = { ...selectedRegion };
+
+            // Remove the red selection box
+            ctx.putImageData(originalImageData, 0, 0);
+
+            // Extract the selected region's image data
+            const selectedImageData = ctx.getImageData(
+                regionToReplace.x,
+                regionToReplace.y,
+                regionToReplace.width,
+                regionToReplace.height
+            );
+
+            // Convert the selected region's image data to a Blob
+            const tempCanvas = document.createElement("canvas");
+            tempCanvas.width = regionToReplace.width;
+            tempCanvas.height = regionToReplace.height;
+            const tempCtx = tempCanvas.getContext("2d");
+            tempCtx.putImageData(selectedImageData, 0, 0);
+
+            // Convert canvas to Blob
+            tempCanvas.toBlob(async (blob) => {
+                // Create a FormData object
+                const formData = new FormData();
+                formData.append('image', blob, 'selected-region.png');  // Append the blob as a file
+
+                // Send the form data to the API using fetch
+                try {
+                    const response = await fetch('http://localhost:3000/process-image', {
+                        method: 'POST',
+                        body: formData,  // Send as multipart/form-data
+                    });
+
+                    if (!response.ok) {
+                        throw new Error('Failed to process the image.');
+                    }
+
+                    // Read the binary response and display it as an image
+                    const blobResponse = await response.blob();
+
+                    // Create an Image object from the binary data
+                    const newImage = new Image();
+                    newImage.onload = function () {
+                        // Draw the new image directly onto the canvas in the selected region
+                        ctx.drawImage(newImage, regionToReplace.x, regionToReplace.y, regionToReplace.width, regionToReplace.height);
+                    };
+
+                    // Create a URL for the binary image data and set it as the source for the new image
+                    const imageUrl = URL.createObjectURL(blobResponse);
+                    newImage.src = imageUrl;
+
+                } catch (error) {
+                    console.error("Error sending image to API:", error);
+                    alert("Failed to send the image to the API.");
+                }
+            }, 'image/png');  // Set the format of the blob (PNG in this case)
+
+            // Reset the selectedRegion
+            selectedRegion = null;
+        });
+    </script>
+</body>
+</html>
