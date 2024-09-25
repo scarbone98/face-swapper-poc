@@ -9,7 +9,6 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            justify-content: center;
             margin: 0;
             height: 100vh;
             background-color: #f0f0f0;
@@ -20,18 +19,83 @@
         button {
             margin-top: 10px;
         }
+        .sliders-container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            max-width: 500px;
+            margin-top: 20px;
+        }
+        .slider-group {
+            margin: 10px;
+            text-align: center;
+        }
+        .slider-group label {
+            display: block;
+        }
     </style>
 </head>
 <body>
     <input type="file" id="imageLoader" accept="image/*" />
     <canvas id="canvas" width="500" height="500"></canvas>
     <button id="sendToApi">Send Selected Region to API</button>
+    <div class="sliders-container">
+        <div class="slider-group">
+            <label for="rotate_pitch">Rotate Pitch</label>
+            <input type="range" id="rotate_pitch" min="-20" max="20" step="0.1" value="0">
+        </div>
+        <div class="slider-group">
+            <label for="rotate_yaw">Rotate Yaw</label>
+            <input type="range" id="rotate_yaw" min="-20" max="20" step="0.1" value="0">
+        </div>
+        <div class="slider-group">
+            <label for="rotate_roll">Rotate Roll</label>
+            <input type="range" id="rotate_roll" min="-20" max="1" step="0.1" value="20">
+        </div>
+        <div class="slider-group">
+            <label for="blink">Blink</label>
+            <input type="range" id="blink" min="-20" max="5" step="0.1" value="0">
+        </div>
+        <div class="slider-group">
+            <label for="eyebrow">Eyebrow</label>
+            <input type="range" id="eyebrow" min="-10" max="15" step="0.1" value="0">
+        </div>
+        <div class="slider-group">
+            <label for="wink">Wink</label>
+            <input type="range" id="wink" min="0" max="25" step="0.1" value="0">
+        </div>
+        <div class="slider-group">
+            <label for="pupil_x">Pupil X</label>
+            <input type="range" id="pupil_x" min="-15" max="15" step="0.1" value="0">
+        </div>
+        <div class="slider-group">
+            <label for="pupil_y">Pupil Y</label>
+            <input type="range" id="pupil_y" min="-15" max="15" step="0.1" value="0">
+        </div>
+        <div class="slider-group">
+            <label for="aaa">AAA</label>
+            <input type="range" id="aaa" min="-30" max="120" step="0.1" value="0">
+        </div>
+        <div class="slider-group">
+            <label for="eee">EEE</label>
+            <input type="range" id="eee" min="-20" max="15" step="0.1" value="0">
+        </div>
+        <div class="slider-group">
+            <label for="woo">WOO</label>
+            <input type="range" id="woo" min="-20" max="15" step="0.1" value="0">
+        </div>
+        <div class="slider-group">
+            <label for="smile">Smile</label>
+            <input type="range" id="smile" min="0" max="1.3" step="0.1" value="0.5">
+        </div>
+    </div>
 
     <script>
         const canvas = document.getElementById("canvas");
         const ctx = canvas.getContext("2d", {willReadFrequently: true});
         let selectedRegion = null;
         let originalImageData = null;
+        let isDrawing = false;
 
         // Load the first image onto the canvas
         document.getElementById("imageLoader").addEventListener("change", (e) => {
@@ -49,37 +113,71 @@
             reader.readAsDataURL(e.target.files[0]);
         });
 
-        // Select a region on the canvas by dragging
-        canvas.addEventListener("mousedown", function (e) {
+        // Function to handle start of selection (mouse down or touch start)
+        function startSelection(e) {
+            isDrawing = true;
             const rect = canvas.getBoundingClientRect();
-            const startX = e.clientX - rect.left;
-            const startY = e.clientY - rect.top;
+            const startX = (e.clientX || e.touches[0].clientX) - rect.left;
+            const startY = (e.clientY || e.touches[0].clientY) - rect.top;
 
-            canvas.onmousemove = function (e) {
-                const mouseX = e.clientX - rect.left;
-                const mouseY = e.clientY - rect.top;
+            function drawSelection(e) {
+                if (!isDrawing) return;
+
+                const mouseX = (e.clientX || e.touches[0].clientX) - rect.left;
+                const mouseY = (e.clientY || e.touches[0].clientY) - rect.top;
 
                 // Restore original image before drawing selection box
                 ctx.putImageData(originalImageData, 0, 0);
 
                 // Update selected region dimensions
                 selectedRegion = {
-                    x: startX,
-                    y: startY,
-                    width: mouseX - startX,
-                    height: mouseY - startY,
+                    x: Math.min(startX, mouseX),
+                    y: Math.min(startY, mouseY),
+                    width: Math.abs(mouseX - startX),
+                    height: Math.abs(mouseY - startY),
                 };
 
                 // Draw the selection box
                 ctx.strokeStyle = "red";
                 ctx.lineWidth = 2;
-                ctx.strokeRect(startX, startY, selectedRegion.width, selectedRegion.height);
+                ctx.strokeRect(selectedRegion.x, selectedRegion.y, selectedRegion.width, selectedRegion.height);
             }
 
-            canvas.addEventListener("mouseup", function () {
-                canvas.onmousemove = null;
-            });
-        });
+            function endSelection() {
+                isDrawing = false;
+                canvas.removeEventListener("mousemove", drawSelection);
+                canvas.removeEventListener("touchmove", drawSelection);
+                document.removeEventListener("mouseup", endSelection);
+                document.removeEventListener("touchend", endSelection);
+            }
+
+            canvas.addEventListener("mousemove", drawSelection);
+            canvas.addEventListener("touchmove", drawSelection);
+            document.addEventListener("mouseup", endSelection);
+            document.addEventListener("touchend", endSelection);
+        }
+
+        // Add event listeners for both mouse and touch events
+        canvas.addEventListener("mousedown", startSelection);
+        canvas.addEventListener("touchstart", startSelection);
+
+        // Function to get all slider values
+        function getSliderValues() {
+            return {
+                rotate_pitch: parseFloat(document.getElementById('rotate_pitch').value),
+                rotate_yaw: parseFloat(document.getElementById('rotate_yaw').value),
+                rotate_roll: parseFloat(document.getElementById('rotate_roll').value),
+                blink: parseFloat(document.getElementById('blink').value),
+                eyebrow: parseFloat(document.getElementById('eyebrow').value),
+                wink: parseFloat(document.getElementById('wink').value),
+                pupil_x: parseFloat(document.getElementById('pupil_x').value),
+                pupil_y: parseFloat(document.getElementById('pupil_y').value),
+                aaa: parseFloat(document.getElementById('aaa').value),
+                eee: parseFloat(document.getElementById('eee').value),
+                woo: parseFloat(document.getElementById('woo').value),
+                smile: parseFloat(document.getElementById('smile').value),
+            };
+        }
 
         // Send the selected region to the API
         document.getElementById("sendToApi").addEventListener("click", async () => {
@@ -113,13 +211,19 @@
             tempCanvas.toBlob(async (blob) => {
                 // Create a FormData object
                 const formData = new FormData();
-                formData.append('image', blob, 'selected-region.png');  // Append the blob as a file
+                formData.append('image', blob, 'selected-region.png');
+
+                // Add slider values to the formData
+                const sliderValues = getSliderValues();
+                for (const [key, value] of Object.entries(sliderValues)) {
+                    formData.append(key, value);
+                }
 
                 // Send the form data to the API using fetch
                 try {
                     const response = await fetch('http://localhost:3000/process-image', {
                         method: 'POST',
-                        body: formData,  // Send as multipart/form-data
+                        body: formData,
                     });
 
                     if (!response.ok) {
@@ -144,7 +248,7 @@
                     console.error("Error sending image to API:", error);
                     alert("Failed to send the image to the API.");
                 }
-            }, 'image/png');  // Set the format of the blob (PNG in this case)
+            }, 'image/png');
 
             // Reset the selectedRegion
             selectedRegion = null;

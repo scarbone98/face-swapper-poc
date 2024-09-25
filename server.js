@@ -2,6 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const os = require('os'); // Add this line to import the os module
 
 const app = express();
 const port = 3000;
@@ -29,6 +30,18 @@ app.post('/process-image', upload.single('image'), async (req, res) => {
 
         // Update the workflow to use the input image
         workflowJson["15"].inputs.image = inputImagePath;
+
+        // Update the ExpressionEditor inputs with the slider values
+        const sliderInputs = [
+            'rotate_pitch', 'rotate_yaw', 'rotate_roll', 'blink', 'eyebrow',
+            'wink', 'pupil_x', 'pupil_y', 'aaa', 'eee', 'woo', 'smile'
+        ];
+
+        sliderInputs.forEach(input => {
+            if (req.body[input] !== undefined) {
+                workflowJson["14"].inputs[input] = parseFloat(req.body[input]);
+            }
+        });
 
         // Send the workflow to ComfyUI
         const response = await fetch('http://localhost:8188/prompt', {
@@ -78,7 +91,31 @@ app.post('/process-image', upload.single('image'), async (req, res) => {
     }
 });
 
+// Function to get the local IP address, preferring Ethernet
+function getLocalIpAddress() {
+    const interfaces = os.networkInterfaces();
+    let ethernetIp = null;
+    let fallbackIp = null;
+
+    for (const interfaceName of Object.keys(interfaces)) {
+        for (const iface of interfaces[interfaceName]) {
+            // Skip over non-IPv4 and internal (i.e. 127.0.0.1) addresses
+            if (iface.family === 'IPv4' && !iface.internal) {
+                if (interfaceName.toLowerCase().includes('ethernet')) {
+                    return iface.address; // Return immediately if Ethernet is found
+                } else if (!ethernetIp) {
+                    fallbackIp = iface.address; // Store as fallback
+                }
+            }
+        }
+    }
+    return ethernetIp || fallbackIp || 'localhost'; // Return Ethernet IP, fallback, or localhost
+}
+
 // Start the server
-app.listen(port, () => {
-    console.log(`Server is running on http://localhost:${port}`);
+app.listen(port, '0.0.0.0', () => {
+    const localIp = getLocalIpAddress();
+    console.log(`Server is running on:`);
+    console.log(`- Local:   http://localhost:${port}`);
+    console.log(`- Network: http://${localIp}:${port}`);
 });
